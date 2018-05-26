@@ -3,6 +3,10 @@ From each group select first last and one at random. Keywords: sas sql join merg
     From each group select first last and one at random
 
     Same result in WPS and SAS
+    
+    see Mark and Paul's New Solutions on end
+    Paul Dorfman
+    Mark Keintz
 
     From Paul Dorfman post on SAS-L
 
@@ -172,4 +176,6 @@ From each group select first last and one at random. Keywords: sas sql join merg
       end ;
     run;quit;
     ');
+
+
 
