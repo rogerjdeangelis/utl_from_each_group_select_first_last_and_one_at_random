@@ -1,6 +1,13 @@
 From each group select first last and one at random
 
  Same result in WPS and SAS
+ 
+ 
+ see Mark and Paul's New Solutions on end
+ Paul Dorfman
+ Mark Keintz
+
+
 
 From Paul Dorfman post on SAS-L
 
@@ -170,6 +177,151 @@ data wrk.wantwps (drop = K N) ;
   end ;
 run;quit;
 ');
+
+
+*____             _
+|  _ \ __ _ _   _| |
+| |_) / _` | | | | |
+|  __/ (_| | |_| | |
+|_|   \__,_|\__,_|_|
+
+;
+
+Best regards,
+Paul Dorfman
+
+Roger,
+
+Tis' nice. But would it not be a bit simpler to output the !st and Nth
+(or just the !st if the BY-group has only one), then pick just one
+randomly between 2 and N-1 after the DoW is over for the BY-group and then fetch it with point= ? Something like:
+
+data have;
+  input id date ;
+  cards;
+1  101
+2  201
+2  202
+3  301
+3  302
+3  303
+4  401
+4  402
+4  403
+4  404
+5  501
+5  502
+5  503
+5  504
+5  505
+;
+run ;
+
+data want (drop = _:) ;
+  do _n_ = 1 by 1 until (last.id) ;
+    set have ;
+    by ID ;
+    _q ++ 1 ;
+    if _n_ = 1 then output ; *output !st;
+  end ;
+  if _n_ > 1 ;
+  output ;                         *output last if _n_>1;
+  if _n_ > 2 ;
+  p = _q - ceil (rand ("uniform") * (_n_ - 2)) ; *pick one if _n_=>3;
+  set have point = p ;
+  output ;
+run ;
+
+The drawback is that the random one will be out of order by date,
+if that matters. On the positive side, you won't have to read each BY-group twice.
+
+Mark,
+
+But indeed. It's a very interesting variation I haven't quite thought of!
+
+On the other hand, this problem example is a curious app for various
+features of the hash and hash iterator objects:
+
+data want ;
+  dcl hash h (ordered:"A") ;
+  dcl hiter i ("h") ;
+  h.definekey ("_n_") ;
+  h.definedata ("ID", "date") ;
+  h.definedone () ;
+  do _n_ = 1 by 1 until (last.id) ;
+    set have ;
+    by ID ;
+    h.add() ;
+  end ;
+  if _n_ <= 3 then do while (i.next() = 0) ;
+    output ;
+  end ;
+  else do ;
+    i.first() ;                                               output ;
+    i.setcur (key: ceil (rand ("uniform") * (_n_ - 2)) + 1) ; output ;
+    i.last() ;                                                output ;
+  end ;
+  h.delete() ;
+  i.delete() ;
+run ;
+
+Note that i.delete() is not imperative; but I don't want to spawn another iterator
+instance for each BY-group while keeping all those having already been spawned.
+
+
+*__  __            _
+|  \/  | __ _ _ __| | __
+| |\/| |/ _` | '__| |/ /
+| |  | | (_| | |  |   <
+|_|  |_|\__,_|_|  |_|\_\
+
+;
+
+Mark Keintz
+mkeintz@wharton.upenn.edu
+
+If other conditions require populating the hash with all observations, then I like the ability to
+  else do rc=i.first(),i.setcur (key:ceil(rand("uniform")*(_n_-2))+1),i.last() ;
+    output ;
+  end ;
+
+especially  because the SETCUR key can be an expression (unlike POINT= in the SET statement).
+
+But if all the non-selected observations have no other utility, why make the hash
+object larger than necessary?  Particularly if ID groups are large?  My first
+inclination would be to keep only the selected observations in the hash object,
+then do a bulk output at END_OF_HAVE:
+
+data _null_;
+  if _n_=1 then do;
+    dcl hash h (ordered:"A") ;
+      h.definekey ("_n_") ;
+      h.definedata ("ID", "date") ;
+      h.definedone () ;
+  end;
+  set have end=end_of_have;
+  by id;
+
+  retain maxrand middle_n;
+
+  if first.id then do;
+    h.add();
+    middle_n=_n_+0.5;
+    maxrand=.;
+  end;
+  else if last.id then rc=h.add();
+  else do;
+    thisrand=rand('uniform');
+    _n_=middle_n;
+    if thisrand>maxrand then rc=h.replace();
+    maxrand=max(maxrand,thisrand);
+  end;
+
+  if end_of_have then h.output(dataset:'want');
+run;
+
+regards,
+Mark
 
 
 
